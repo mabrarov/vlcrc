@@ -56,6 +56,9 @@ int main(int argc, char* argv[])
       typedef std::lock_guard<mutex_type> lock_guard_type;
       typedef std::unique_lock<mutex_type> unique_lock_type;
 
+      wait_data_type() : finished_playing(false)
+      { }
+
       mutex_type mutex;
       std::condition_variable condition;
       bool finished_playing;
