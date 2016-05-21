@@ -26,16 +26,6 @@ int main(int argc, char* argv[])
     }
     libvlc_instance_ptr libvlc_instance(libvlc_raw_instance, libvlc_release);
 
-    // Create a new item
-    libvlc_media_t
-        * raw_media = libvlc_media_new_path(libvlc_instance.get(), argv[1]);
-    if (!raw_media)
-    {
-      throw std::runtime_error(
-          "Failed to load media: " + std::string(libvlc_errmsg()));
-    }
-    libvlc_media_ptr media(raw_media, libvlc_media_release);
-
     // Create a media player playing environment
     libvlc_media_player_t
         * raw_media_player = libvlc_media_player_new(libvlc_instance.get());
@@ -47,9 +37,11 @@ int main(int argc, char* argv[])
     libvlc_media_player_ptr
         media_player(raw_media_player, libvlc_media_player_release);
 
+    // Get access to player events
     libvlc_event_manager_t
         * event_manager = libvlc_media_player_event_manager(media_player.get());
 
+    // Flag data for notifying main thread about end of media playback
     struct wait_data_type
     {
       typedef std::mutex mutex_type;
@@ -64,6 +56,7 @@ int main(int argc, char* argv[])
       bool finished_playing;
     } wait_data;
 
+    // Media playback end callback
     libvlc_callback_t end_reached_callback =
         [](const struct libvlc_event_t* event, void* data)
         {
@@ -76,6 +69,7 @@ int main(int argc, char* argv[])
           }
         };
 
+    // Setup required callbacks to hook player events
     if (libvlc_event_attach(event_manager, libvlc_MediaPlayerEndReached,
         end_reached_callback, &wait_data))
     {
@@ -84,6 +78,17 @@ int main(int argc, char* argv[])
           std::string(libvlc_errmsg()));
     }
 
+    // Load media
+    libvlc_media_t
+        * raw_media = libvlc_media_new_path(libvlc_instance.get(), argv[1]);
+    if (!raw_media)
+    {
+      throw std::runtime_error(
+          "Failed to load media: " + std::string(libvlc_errmsg()));
+    }
+    libvlc_media_ptr media(raw_media, libvlc_media_release);
+
+    // Make player using the loaded media
     libvlc_media_player_set_media(media_player.get(), media.get());
 
     // Media is not needed anymore
@@ -99,6 +104,7 @@ int main(int argc, char* argv[])
           "Failed to start playing: " + std::string(libvlc_errmsg()));
     }
 
+    // Wait till the end of media playback
     {
       wait_data_type::unique_lock_type wait_data_lock(wait_data.mutex);
       wait_data.condition.wait(wait_data_lock, [&wait_data]() -> bool
