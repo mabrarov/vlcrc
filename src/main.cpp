@@ -60,7 +60,8 @@ int main(int argc, char* argv[])
     libvlc_callback_t end_reached_callback =
         [](const struct libvlc_event_t* event, void* data)
         {
-          if (libvlc_MediaPlayerEndReached == event->type)
+          if (libvlc_MediaPlayerEndReached == event->type ||
+              libvlc_MediaPlayerEncounteredError == event->type)
           {
             wait_data_type* wait_data = reinterpret_cast<wait_data_type*>(data);
             wait_data_type::lock_guard_type lock(wait_data->mutex);
@@ -77,40 +78,56 @@ int main(int argc, char* argv[])
           "Failed to add event listener for media player: " +
           std::string(libvlc_errmsg()));
     }
-
-    // Load media
-    libvlc_media_t
-        * raw_media = libvlc_media_new_path(libvlc_instance.get(), argv[1]);
-    if (!raw_media)
+    if (libvlc_event_attach(event_manager, libvlc_MediaPlayerEncounteredError,
+        end_reached_callback, &wait_data))
     {
       throw std::runtime_error(
-          "Failed to load media: " + std::string(libvlc_errmsg()));
+          "Failed to add event listener for media player: " +
+          std::string(libvlc_errmsg()));
     }
-    libvlc_media_ptr media(raw_media, libvlc_media_release);
-
-    // Make player using the loaded media
-    libvlc_media_player_set_media(media_player.get(), media.get());
-
-    // Media is not needed anymore
-    media.reset();
 
     // Turn on fullscreen mode
     libvlc_toggle_fullscreen(media_player.get());
 
-    // Start playing
-    if (libvlc_media_player_play(media_player.get()))
+    for (int i = 1; i < argc; ++i)
     {
-      throw std::runtime_error(
-          "Failed to start playing: " + std::string(libvlc_errmsg()));
-    }
-
-    // Wait till the end of media playback
-    {
-      wait_data_type::unique_lock_type wait_data_lock(wait_data.mutex);
-      wait_data.condition.wait(wait_data_lock, [&wait_data]() -> bool
+      // Load media
+      libvlc_media_t
+          * raw_media = libvlc_media_new_path(libvlc_instance.get(), argv[i]);
+      if (!raw_media)
       {
-        return wait_data.finished_playing;
-      });
+        throw std::runtime_error(
+            "Failed to load media: " + std::string(libvlc_errmsg()));
+      }
+      libvlc_media_ptr media(raw_media, libvlc_media_release);
+
+      // Make player using the loaded media
+      libvlc_media_player_set_media(media_player.get(), media.get());
+
+      // Media is not needed anymore
+      media.reset();
+
+      // Setup flag
+      {
+        wait_data_type::lock_guard_type lock(wait_data.mutex);
+        wait_data.finished_playing = false;
+      }
+
+      // Start playing
+      if (libvlc_media_player_play(media_player.get()))
+      {
+        throw std::runtime_error(
+            "Failed to start playing: " + std::string(libvlc_errmsg()));
+      }
+
+      // Wait till the end of media playback
+      {
+        wait_data_type::unique_lock_type lock(wait_data.mutex);
+        wait_data.condition.wait(lock, [&wait_data]() -> bool
+        {
+          return wait_data.finished_playing;
+        });
+      }
     }
 
     // Stop playing
