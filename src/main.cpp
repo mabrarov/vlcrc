@@ -28,6 +28,9 @@ int main(int argc, char* argv[])
   // Media is not needed anymore
   media.reset();
 
+  // Turn on fullscreen mode
+  libvlc_toggle_fullscreen(media_player.get());
+
   // Start playing
   libvlc_media_player_play(media_player.get());
 
