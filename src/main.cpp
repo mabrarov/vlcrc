@@ -17,8 +17,8 @@ int main(int argc, char* argv[])
   libvlc_instance_ptr libvlc_instance(libvlc_new(0, nullptr), libvlc_release);
 
   // Create a new item
-  libvlc_media_ptr media(libvlc_media_new_path(libvlc_instance.get(),
-      "/home/marat/Видео/Winnie-the-Pooh.avi"), libvlc_media_release);
+  libvlc_media_ptr media(libvlc_media_new_path(libvlc_instance.get(), argv[1]),
+      libvlc_media_release);
 
   // Create a media player playing environment
   libvlc_media_player_ptr media_player
