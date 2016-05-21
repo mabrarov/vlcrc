@@ -1,9 +1,10 @@
 #include <cstdlib>
-#include <iostream>
 #include <exception>
+#include <iostream>
 #include <memory>
-#include <chrono>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <vlc/vlc.h>
 
 int main(int argc, char* argv[])
@@ -46,6 +47,40 @@ int main(int argc, char* argv[])
     libvlc_media_player_ptr
         media_player(raw_media_player, libvlc_media_player_release);
 
+    libvlc_event_manager_t
+        * event_manager = libvlc_media_player_event_manager(media_player.get());
+
+    struct wait_data_type
+    {
+      typedef std::mutex mutex_type;
+      typedef std::lock_guard<mutex_type> lock_guard_type;
+      typedef std::unique_lock<mutex_type> unique_lock_type;
+
+      mutex_type mutex;
+      std::condition_variable condition;
+      bool finished_playing;
+    } wait_data;
+
+    libvlc_callback_t end_reached_callback =
+        [](const struct libvlc_event_t* event, void* data)
+        {
+          if (libvlc_MediaPlayerEndReached == event->type)
+          {
+            wait_data_type* wait_data = reinterpret_cast<wait_data_type*>(data);
+            wait_data_type::lock_guard_type lock(wait_data->mutex);
+            wait_data->finished_playing = true;
+            wait_data->condition.notify_all();
+          }
+        };
+
+    if (libvlc_event_attach(event_manager, libvlc_MediaPlayerEndReached,
+        end_reached_callback, &wait_data))
+    {
+      throw std::runtime_error(
+          "Failed to add event listener for media player: " +
+          std::string(libvlc_errmsg()));
+    }
+
     libvlc_media_player_set_media(media_player.get(), media.get());
 
     // Media is not needed anymore
@@ -61,8 +96,13 @@ int main(int argc, char* argv[])
           "Failed to start playing: " + std::string(libvlc_errmsg()));
     }
 
-    // Let it play a bit
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    {
+      wait_data_type::unique_lock_type wait_data_lock(wait_data.mutex);
+      wait_data.condition.wait(wait_data_lock, [&wait_data]() -> bool
+      {
+        return wait_data.finished_playing;
+      });
+    }
 
     // Stop playing
     libvlc_media_player_stop(media_player.get());
