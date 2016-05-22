@@ -24,7 +24,6 @@ list(APPEND cxx_private_compile_features
     cxx_auto_type
     cxx_nullptr
     cxx_lambdas
-    cxx_lambda_init_captures
     cxx_local_type_template_args
     cxx_range_for
     cxx_rvalue_references)
