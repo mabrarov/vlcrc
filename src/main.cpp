@@ -87,7 +87,10 @@ int main(int argc, char* argv[])
     }
 
     // Turn on fullscreen mode
-    libvlc_toggle_fullscreen(media_player.get());
+    libvlc_set_fullscreen(media_player.get(), 1);
+    // Turn off handling of mouse and keyboard events
+    libvlc_video_set_mouse_input(media_player.get(), 0);
+    libvlc_video_set_key_input(media_player.get(), 0);
 
     for (int i = 1; i < argc; ++i)
     {
