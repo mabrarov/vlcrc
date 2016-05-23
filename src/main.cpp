@@ -146,4 +146,5 @@ int main(int argc, char* argv[])
   {
     std::cerr << "Unknown error" << std::endl;
   }
+  return EXIT_FAILURE;
 }
